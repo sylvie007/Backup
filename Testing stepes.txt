@@ -1,0 +1,16 @@
+ 
+ - Start CCI-REPO VM in AWS Ohio region.
+
+ - Create new cci-gin servers using following stapes:
+
+    . Create and deploy GIN-BOOTSTRAP-0 and cci-gin server using terraform.
+    . Deploy cci-gin server using ansible on existing GIN-BOOTSTRAP-0.
+    . Create plane cci-gin server through AWS and setup gin on it through ansible using existing GIN-BOOTSTRAP-0.
+ 
+ - For verify deployment of cci-gin server follow "Validate cci-gin Server Deployment" section in of gin readme.
+
+ - Access kiali gui of cci-gin server then upload and deploy multiple models in different sequences. 
+ 
+    . For verify deployment of tosca-models follow "Deployment Of TOSCA Models" section in of gin readme.
+
+
