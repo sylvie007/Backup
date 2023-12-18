@@ -1,0 +1,22 @@
+
+``//-ERRORS & SOLUTIONS-\\``
+
+________________________________________________________________________________________________________________________________________
+
+ERROR : error loading config file "/etc/rancher/k3s/k3s.yaml": open /etc/rancher/k3s/k3s.yaml: permission denied
+
+SOLUTION =  sudo chmod 777 /etc/rancher/k3s/k3s.yaml  - Use this command
+
+======================================================================================================================
+
+ERROR : Failed to allocate directory watch: Too many open files
+
+SOLUTION : sysctl fs.inotify.max_user_instances
+
+=====================================================================================================================
+
+failed-allocate-directory-watch/    for this error 
+
+sudo vi  { path of file }     ex . /etc/sysctl.d/60-fs-inotify.conf
+
+====================================================================================================================
