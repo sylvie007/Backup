@@ -1,0 +1,768 @@
+
+
+Traffic High :
+
+
+
+var db = 'test'
+
+var rp = 'autogen'
+
+var measurement = 'http'
+
+var groupBy = []
+
+var whereFilter = lambda: isPresent("rate")
+
+var name = 'traffic_high'
+
+var idVar = name
+
+var period = 10s
+
+var every = 30s
+
+var message = '{"rule_name":"traffic_high"}'
+
+var idTag = 'alertID'
+
+var levelTag = 'level'
+
+var messageField = 'message'
+
+var durationField = 'duration'
+
+var outputDB = 'chronograf'
+
+var outputRP = 'autogen'
+
+var outputMeasurement = 'alerts'
+
+var triggerType = 'threshold'
+
+var crit = 280
+
+var data = stream
+    |from()
+        .database(db)
+        .retentionPolicy(rp)
+        .measurement(measurement)
+        .groupBy(groupBy)
+        .where(whereFilter)
+    |window()
+        .period(period)
+        .every(every)
+        .align()
+    |max('rate')
+        .as('value')
+
+var trigger = data
+    |alert()
+        .crit(lambda: "value" > crit)
+        .stateChangesOnly()
+        .message(message)
+        .noRecoveries()
+        .id(idVar)
+        .idTag(idTag)
+        .levelTag(levelTag)
+        .messageField(messageField)
+        .durationField(durationField)
+        .post('http://kapacitor-filter:8091/kapacitor/filter')
+
+trigger
+    |eval(lambda: float("value"))
+        .as('value')
+        .keep()
+    |influxDBOut()
+        .create()
+        .database(outputDB)
+        .retentionPolicy(outputRP)
+        .measurement(outputMeasurement)
+        .tag('alertName', name)
+        .tag('triggerType', triggerType)
+
+trigger
+    |httpOut('output')
+
+
+=========================================================================================================
+
+
+Traffic Low :
+
+
+
+var db = 'test'
+
+var rp = 'autogen'
+
+var measurement = 'http'
+
+var groupBy = []
+
+var whereFilter = lambda: isPresent("rate")
+
+var name = 'traffic_low'
+
+var idVar = name
+
+var period = 10s
+
+var every = 30s
+
+var message = '{"rule_name":"traffic_low"}'
+
+var idTag = 'alertID'
+
+var levelTag = 'level'
+
+var messageField = 'message'
+
+var durationField = 'duration'
+
+var outputDB = 'chronograf'
+
+var outputRP = 'autogen'
+
+var outputMeasurement = 'alerts'
+
+var triggerType = 'threshold'
+
+var crit = 100
+
+var data = stream
+    |from()
+        .database(db)
+        .retentionPolicy(rp)
+        .measurement(measurement)
+        .groupBy(groupBy)
+        .where(whereFilter)
+    |window()
+        .period(period)
+        .every(every)
+        .align()
+    |min('rate')
+        .as('value')
+
+var trigger = data
+    |alert()
+        .crit(lambda: "value" < crit)
+        .stateChangesOnly()
+        .message(message)
+        .noRecoveries()
+        .id(idVar)
+        .idTag(idTag)
+        .levelTag(levelTag)
+        .messageField(messageField)
+        .durationField(durationField)
+        .post('http://kapacitor-filter:8091/kapacitor/filter')
+
+trigger
+    |eval(lambda: float("value"))
+        .as('value')
+        .keep()
+    |influxDBOut()
+        .create()
+        .database(outputDB)
+        .retentionPolicy(outputRP)
+        .measurement(outputMeasurement)
+        .tag('alertName', name)
+        .tag('triggerType', triggerType)
+
+trigger
+    |httpOut('output')
+
+===========================================================================================
+
+traffic_low correction script
+
+
+
+var db = 'test'
+
+var rp = 'autogen'
+
+var measurement = 'http'
+
+var groupBy = []
+
+var whereFilter = lambda: isPresent("rate")
+
+var period = 10s
+
+var every = 30s
+
+var name = 'traffic_low'
+
+var idVar = name
+
+var message = '{"rule_name":"traffic_low"}'
+
+var idTag = 'alertID'
+
+var levelTag = 'level'
+
+var messageField = 'message'
+
+var durationField = 'duration'
+
+var outputDB = 'chronograf'
+
+var outputRP = 'autogen'
+
+var outputMeasurement = 'alerts'
+
+var triggerType = 'threshold'
+
+var lower = 50
+
+var upper = 280
+
+var data = stream
+    |from()
+        .database(db)
+        .retentionPolicy(rp)
+        .measurement(measurement)
+        .groupBy(groupBy)
+        .where(whereFilter)
+    |window()
+        .period(period)
+        .every(every)
+        .align()
+    |min('rate')
+        .as('value')
+
+var trigger = data
+    |alert()
+        .crit(lambda: "value" < lower AND "value" < upper)
+        .stateChangesOnly()
+        .message(message)
+        .noRecoveries()
+        .id(idVar)
+        .idTag(idTag)
+        .levelTag(levelTag)
+        .messageField(messageField)
+        .durationField(durationField)
+        .stateChangesOnly()
+        .post('http://kapacitor-filter:8091/kapacitor/filter')
+
+trigger
+    |eval(lambda: float("value"))
+        .as('value')
+        .keep()
+    |influxDBOut()
+        .create()
+        .database(outputDB)
+        .retentionPolicy(outputRP)
+        .measurement(outputMeasurement)
+        .tag('alertName', name)
+        .tag('triggerType', triggerType)
+
+trigger
+    |httpOut('output')
+
+
+
+
+===================================================================================================================================================================
+
+
+APISIX Code
+
+package apisix
+
+import (
+	"bytes"
+	"encoding/json"
+	"io/ioutil"
+	"net/http"
+
+	"github.com/customercaresolutions/gin/common"
+	"github.com/google/uuid"
+	"github.com/tliron/kutil/ard"
+	"github.com/tliron/kutil/logging"
+)
+
+type Nodes struct {
+	Host   string `json:"host"`
+	Port   int    `json:"port"`
+	Weight int    `json:"weight"`
+}
+
+type Upstream struct {
+	Type  string  `json:"type"`
+	Nodes []Nodes `json:"nodes"`
+}
+
+type RouteData struct {
+	ID       string   `json:"id"`
+	Name     string   `json:"name"`
+	Methods  []string `json:"methods"`
+	Host     string   `json:"host"`
+	URI      string   `json:"uri"`
+	Upstream Upstream `json:"upstream"`
+}
+
+var log = logging.GetLogger("apisix.api")
+
+func HandleRequestsOfApisix(port int, uriPath string, hostNamePrefix string) error {
+	ginServerNamespace := common.SoConfig.Remote.GinServerNamespace
+	dnsName := common.SoConfig.ApisixGateway.ApisixHostName
+	hostName := "." + ginServerNamespace + ".svc.cluster.local"
+	apisixNamespace := common.SoConfig.ApisixGateway.ApisixNamespace
+
+	//if route already present in APISIX then return
+	if isRouteAlreadyPresent(port, uriPath, hostNamePrefix) {
+		log.Infof("Route for '%s' service already exists in APISIX", uriPath)
+		return nil
+	}
+
+	log.Infof("Creating route for '%s' service in APISIX", uriPath)
+	gatRandomID := uuid.New()
+	methods := []string{"GET", "PUT", "POST", "DELETE"}
+
+	NodesData := Nodes{
+		Host:   hostNamePrefix + hostName,
+		Port:   port,
+		Weight: 1,
+	}
+
+	listnodeData := make([]Nodes, 0)
+	listnodeData = append(listnodeData, NodesData)
+	upstreamData := Upstream{
+		Type:  "roundrobin",
+		Nodes: listnodeData,
+	}
+
+	data := RouteData{
+		ID:       gatRandomID.String(),
+		Name:     hostNamePrefix,
+		Methods:  methods,
+		Host:     dnsName,
+		URI:      uriPath,
+		Upstream: upstreamData,
+	}
+
+	routedataBytes, err := json.Marshal(data)
+	if err != nil {
+		log.Errorf("Error : %s", err)
+	}
+
+	body := bytes.NewReader(routedataBytes)
+
+	path := "http://apisix-admin." + apisixNamespace + ".svc.cluster.local:9180/apisix/admin/routes"
+	req, err := http.NewRequest("PUT", path, body)
+	if err != nil {
+		log.Errorf("Error while creating route request for APISIX: %s", err)
+	}
+
+	req.Header.Set("X-Api-Key", "edd1c9f034335f136f87ad84b625c8f1")
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		log.Errorf("Error while creating route in APISIX: %s", err)
+	}
+
+	defer resp.Body.Close()
+	return nil
+}
+
+func isRouteAlreadyPresent(port int, uriPath string, hostNamePrefix string) bool {
+	apisixNamespace := common.SoConfig.ApisixGateway.ApisixNamespace
+	path := "http://apisix-admin." + apisixNamespace + ".svc.cluster.local:9180/apisix/admin/routes"
+	req, err := http.NewRequest("GET", path, nil)
+	if err != nil {
+		log.Errorf("Error while creating GET route request for APISIX: %s", err)
+		return false
+	}
+
+	req.Header.Set("X-Api-Key", "edd1c9f034335f136f87ad84b625c8f1")
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		log.Errorf("Error while GET routes from APISIX: %s", err)
+		return false
+	}
+
+	defer resp.Body.Close()
+	data, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Errorf("Error : %v", err.Error())
+		return false
+	}
+
+	data1 := make(ard.StringMap)
+	err = json.Unmarshal(data, &data1)
+
+	var rNode map[string]any
+	if node, ok := data1["node"].(ard.StringMap); ok {
+		rNode = node
+	}
+
+	var rNodes ard.List
+	if nodes, ok := rNode["nodes"].(ard.List); ok {
+		rNodes = nodes
+	}
+
+	for _, routNode := range rNodes {
+		routeNodeMap := routNode.(ard.StringMap)
+		value := routeNodeMap["value"].(ard.StringMap)
+		uri := value["uri"]
+		name := value["name"]
+
+		if name == hostNamePrefix && uri == uriPath {
+			return true
+		}
+	}
+	return false
+}
+
+-------------------------------------------------------------------------
+
+
+// deleteDuplicateRoutes deletes any duplicate routes from APISIX
+func deleteDuplicateRoutes(port, uriPath, hostNamePrefix string) error {
+// get all the routes from APISIX
+routes, err := getRoutesFromAPISIX()
+if err != nil {
+return err
+}
+
+// create a map to store the unique routes
+uniqueRoutes := make(map[string]bool)
+
+// iterate over the routes and check for duplicates
+for _, route := range routes {
+// generate a key for the route based on its port, uriPath and hostNamePrefix
+key := fmt.Sprintf("%s:%s:%s", port, uriPath, hostNamePrefix)
+
+// if the key already exists in the map, it means the route is a duplicate
+if uniqueRoutes[key] {
+// delete the route from APISIX
+err := deleteRouteFromAPISIX(route.ID)
+if err != nil {
+return err
+}
+log.Infof("Deleted duplicate route for '%s' service from APISIX", uriPath)
+} else {
+// otherwise, add the key to the map
+uniqueRoutes[key] = true
+}
+}
+
+return nil
+}
+
+
+
+----------------------------------------------------------------------------------------
+
+
+
+func deleteDuplicateRoutes(port, uriPath, hostNamePrefix string) error {
+
+routes, err := getRoutesFromAPISIX()
+if err != nil {
+return err
+}
+
+
+uniqueRoutes := make(map[string]bool)
+
+
+for _, route := range routes {
+
+key := fmt.Sprintf("%s:%s:%s", port, uriPath, hostNamePrefix)
+
+
+if uniqueRoutes[key] {
+err := deleteRouteFromAPISIX(route.ID)
+if err != nil {
+return err
+}
+log.Infof("Deleted duplicate route for '%s' service from APISIX", uriPath)
+} else {
+uniqueRoutes[key] = true
+}
+}
+
+return nil
+}
+
+
+=============================================================================================================================================================================================================
+=============================================================================================================================================================================================================
+
+
+
+gin-setup.sh
+
+
+
+#----------ginutils
+
+sudo apt update
+git clone https://github.com/customercaresolutions/gin-utils
+sudo sed -i  "s/sub_domain_name/{{ aws_instance_name }}/g" /home/ubuntu/gin-utils/kiali/config.sh
+sudo sed -i  "s/main_domain_name/{{ domain_name }}/g" /home/ubuntu/gin-utils/kiali/config.sh
+
+==============================================================================================================
+
+#----------k3s
+
+cd /home/ubuntu
+sudo apt-get update -y
+sudo apt update
+sudo apt-get install -y dos2unix
+curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC='--disable=traefik' INSTALL_K3S_VERSION=v1.25.11+k3s1 sh -s - --kube-apiserver-arg='token-auth-file=/home/ubuntu/gin-utils/k8s-dashboard/token.csv'
+mkdir -p $HOME/.kube
+sudo chmod 777 /etc/rancher/k3s/k3s.yaml
+sudo kubectl config set-context --current --namespace=default
+sudo cp /etc/rancher/k3s/k3s.* $HOME/.kube/config
+sudo chown $(id -u):$(id -g) $HOME/.kube/config
+kubectl get node
+kubectl get pods --all-namespaces
+sudo cp gin-utils/k3s/registries.yaml /etc/rancher/k3s/registries.yaml
+sudo systemctl daemon-reload && sudo systemctl restart k3s
+sudo chmod 777 /etc/rancher/k3s/k3s.yaml
+sudo apt install -y jq socat
+sudo sed -i  "s/127.0.0.1/$(curl http://169.254.169.254/latest/meta-data/local-ipv4)/g" ~/.kube/config
+
+==============================================================================================================
+
+#----------helm
+
+cd /home/ubuntu
+wget https://get.helm.sh/helm-v3.12.2-linux-amd64.tar.gz
+tar xvfz helm-v3.12.2-linux-amd64.tar.gz
+sudo mv linux-amd64/helm /usr/local/bin/helm
+
+===============================================================================================================
+
+#----------istio {Don't run}
+
+cd /home/ubuntu
+helm repo add jetstack https://charts.jetstack.io
+helm repo update
+kubectl apply -f /home/ubuntu/gin-utils/istio/cert-manager.crds.yaml
+helm install cert-manager jetstack/cert-manager --namespace cert-manager --create-namespace --version v1.12
+sleep 20
+kubectl create namespace istio-system
+kubectl apply -f  /home/ubuntu/gin-utils/istio/example-issuer.yaml
+sleep 3
+kubectl get -n istio-system secret istio-ca {% raw %}-ogo-template='{{index .data "tls.crt"}}' {% endraw %} | base64 -d > ca.pem 
+sleep 5
+openssl x509 -in ca.pem -noout -text
+kubectl create secret generic -n cert-manager istio-root-ca --from-file=ca.pem=ca.pem
+helm install -n cert-manager cert-manager-istio-csr jetstack/cert-manager-istio-csr --version 0.7.0 --set "app.tls.rootCAFile=/var/run/secrets/istio-csr/ca.pem" --set "volumeMounts[0].name=root-ca" --set "volumeMounts[0].mountPath=/var/run/secrets/istio-csr" --set "volumes[0].name=root-ca" --set "volumes[0].secret.secretName=istio-root-ca"
+kubectl create ns gin
+curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.18.2 TARGET_ARCH=x86_64 sh -
+cd istio-1.13.2
+sudo mv ~/istio-1.13.2/bin/istioctl /usr/local/bin/istioctl
+istioctl install -f /home/ubuntu/gin-utils/istio/istio-install-config.yaml --set meshConfig.accessLogFile=/dev/stdout --set meshConfig.accessLogEncoding=JSON --set meshConfig.enableTracing=true -y
+sleep 5
+kubectl label namespace gin default istio-injection=enabled
+kubectl create -f  /home/ubuntu/gin-utils/gwec/pull-gwec-images.yaml
+sudo sed -i  's/kiali-linkerd/kiali-istio/g' gin-utils/kiali/kiali.yaml
+
+=================================================================================================================
+
+#----------linkerd
+
+cd /home/ubuntu
+helm repo add jetstack https://charts.jetstack.io
+helm repo update
+kubectl apply -f /home/ubuntu/gin-utils/istio/cert-manager.crds.yaml
+helm install cert-manager jetstack/cert-manager --namespace cert-manager --create-namespace --version v1.12
+kubectl create namespace istio-system
+curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.18.2 TARGET_ARCH=x86_64 sh -
+kubectl create namespace gin
+curl --proto '=https' --tlsv1.2 -sSfL https://run.linkerd.io/install | sh
+sudo mv ~/.linkerd2/bin/linkerd /usr/local/sbin/linkerd
+linkerd check --pre
+linkerd install --crds | kubectl apply -f -
+linkerd install | kubectl apply -f -
+kubectl apply -f /home/ubuntu/gin-utils/linkerd/config.yaml
+linkerd viz install --set dashboard.enforcedHostRegexp='{{ aws_instance_name }}-linkerd.{{ domain_name }}' | kubectl apply -f -
+sleep 10
+linkerd check
+linkerd version
+
+==================================================================================================================
+
+#----------apisix
+
+cd /home/ubuntu
+
+
+kubectl create ns ingress-apisix
+kubectl label namespace ingress-apisix istio-injection=enabled
+helm repo add apisix https://charts.apiseven.com
+helm repo update
+helm install apisix apisix/apisix --set gateway.tls.enabled=true --set ingress-controller.enabled=true --namespace ingress-apisix
+kubectl apply -f ~/gin-utils/apisix/apisix-cert.yaml
+helm install apisix-dashboard apisix/apisix-dashboard --set gateway.type=NodePort --set service.port=8081 --namespace ingress-apisix
+kubectl get svc apisix-dashboard -n ingress-apisix
+
+==================================================================================================================
+
+#----------tick
+
+cd /home/ubuntu
+helm install tick-influx influxdb --repo https://helm.influxdata.com/ -n gin --set persistence.enabled=false --kubeconfig ~/.kube/config
+helm install tick-tel telegraf --repo https://helm.influxdata.com/ -n gin -f /home/ubuntu/gin-utils/tick-metrics/telegraf-overrides.yaml --kubeconfig ~/.kube/config
+helm install tick-kap kapacitor --repo https://helm.influxdata.com/ -n gin -f /home/ubuntu/gin-utils/tick-metrics/kap-overrides.yaml --kubeconfig ~/.kube/config
+helm install tick-chron chronograf --repo https://helm.influxdata.com/ -n gin --kubeconfig ~/.kube/config
+
+=================================================================================================================
+
+#----------dmaap
+
+cd /home/ubuntu
+helm install --kubeconfig=$HOME/.kube/config /home/ubuntu/gin-utils/helm-charts/zk-6.0.3.tar.gz -f /home/ubuntu/gin-utils/helm-charts/zk-values.yaml --namespace gin --generate-name
+helm install --kubeconfig=$HOME/.kube/config /home/ubuntu/gin-utils/helm-charts/kafka-1.0.4.tar.gz -f /home/ubuntu/gin-utils/helm-charts/kafka-values.yaml --namespace gin --generate-name
+helm install --kubeconfig=$HOME/.kube/config /home/ubuntu/gin-utils/helm-charts/dmaap-18.0.1.tar.gz -f /home/ubuntu/gin-utils/helm-charts/dmaap-values.yaml --namespace gin --generate-name
+
+=================================================================================================================
+
+#----------ginserver
+
+## Read properties for ginserver
+sudo apt-get install -y python3-pip
+sudo pip3 install boto3
+cd /home/ubuntu
+sudo sed -i  "s/dgraphdb/tosca-dgraph/g" gin-utils/gin-config/application.cfg
+sudo sed -i  "s/gin-server.com/$(curl http://169.254.169.254/latest/meta-data/local-ipv4)/g" gin-utils/gin-config/application.cfg
+sudo sed -i  "s/message-router/dmaap/g" gin-utils/gin-config/application.cfg
+sudo sed -i  "s/pushCsarToReposure=false/pushCsarToReposure=true/g" gin-utils/gin-config/application.cfg
+sudo sed -i  "s/sub_domain_name-apisix.main_domain_name/{{ aws_instance_name }}-apisix-gateway.{{ domain_name }}/g" gin-utils/gin-config/application.cfg	
+
+sudo sed -i  "s/Private_IP_OF_RIC_VM/$(curl http://169.254.169.254/latest/meta-data/local-ipv4)/g" gin-utils/gin-config/application.cfg
+sudo sed -i  "s/Private_IP_OF_GIN_SERVER/$(curl http://169.254.169.254/latest/meta-data/local-ipv4)/g" gin-utils/gin-config/application.cfg
+cd /home/ubuntu
+helm install gin --kubeconfig=$HOME/.kube/config /home/ubuntu/gin-utils/helm-charts/gin-0.3.tgz --namespace gin
+helm install --kubeconfig=$HOME/.kube/config /home/ubuntu/gin-utils/helm-charts/dgraph.tgz --namespace gin --generate-name
+helm install --kubeconfig=$HOME/.kube/config /home/ubuntu/gin-utils/helm-charts/dgraph.tgz -f /home/ubuntu/gin-utils/helm-charts/dgraph-values.yaml --namespace gin --generate-name
+
+===============================================================================================================
+
+#----------reposure
+
+cd /home/ubuntu
+sudo chmod +x gin-utils/reposure/reposure
+sudo cp gin-utils/reposure/reposure /usr/local/bin/reposure
+reposure operator install
+reposure simple install
+reposure registry create default --provider=simple
+
+==============================================================================================================
+
+#----------argo
+
+cd /home/ubuntu
+sudo kubectl apply -n gin -f /home/ubuntu/gin-utils/argo/workflow-controller-configmap.yaml
+kubectl get svc argo-server -n gin
+
+============================================================================================================
+
+#----------tls
+
+cd /home/ubuntu
+sudo sed -i  "s/sub_domain_name/{{ aws_instance_name }}/g" /home/ubuntu/gin-utils/authelia/configuration.yml
+sudo sed -i  "s/main_domain_name/{{ domain_name }}/g" /home/ubuntu/gin-utils/authelia/configuration.yml
+sudo sed -i  "s/sub_domain_name/{{ aws_instance_name }}/g" /home/ubuntu/gin-utils/authelia/authelia-ingress.yaml
+sudo sed -i  "s/main_domain_name/{{ domain_name }}/g" /home/ubuntu/gin-utils/authelia/authelia-ingress.yaml
+sudo sed -i  "s/sub_domain_name/{{ aws_instance_name }}/g" /home/ubuntu/gin-utils/traefik/gin-tls.yaml
+sudo sed -i  "s/main_domain_name/{{ domain_name }}/g" /home/ubuntu/gin-utils/traefik/gin-tls.yaml
+sudo sed -i  "s/main_domain_name/{{ domain_name }}/g" /home/ubuntu/gin-utils/traefik/apisix-tls.yaml
+kubectl apply -f /home/ubuntu/gin-utils/authelia/kubernetes-crd-definition-v1.yml
+helm repo add traefik https://helm.traefik.io/traefik
+helm repo update
+helm install traefik traefik/traefik --version v20.4.1
+sudo apt install haproxy -y
+sudo cp /home/ubuntu/gin-utils/traefik/haproxy.cfg /etc/haproxy/haproxy.cfg
+kubectl create namespace linkerd-viz &> /dev/null
+sudo systemctl restart haproxy
+kubectl apply -f /home/ubuntu/gin-utils/traefik/gin-issuer.yaml
+kubectl apply -f /home/ubuntu/gin-utils/traefik/gin-staging-issuer.yaml
+kubectl apply -f /home/ubuntu/gin-utils/authelia/authelia-volume.yaml
+sudo mkdir /opt/authelia
+sudo cp /home/ubuntu/gin-utils/authelia/configuration.yml /home/ubuntu/gin-utils/authelia/users_database.yml /opt/authelia
+kubectl apply -f /home/ubuntu/gin-utils/authelia/authelia-service.yaml
+kubectl apply -f /home/ubuntu/gin-utils/authelia/authelia-ingress.yaml
+kubectl create ns kubernetes-dashboard
+kubectl apply -f /home/ubuntu/gin-utils/traefik/gin-tls.yaml
+kubectl apply -f /home/ubuntu/gin-utils/traefik/apisix-tls.yaml
+
+============================================================================================================
+
+#----------vault
+
+cd /home/ubuntu
+sudo apt update
+curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo apt-key add -
+sudo apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main"
+sudo apt-get update
+sudo apt-get install vault -y
+sudo apt install -y ntpdate
+sudo apt-get install -y python3.8 python3.8-dev python3.8-distutils python3.8-venv python-pip
+sudo pip install --upgrade pip
+sudo pip install -U boto
+sudo apt-get install -y software-properties-common
+sudo apt-add-repository universe
+sudo apt-get update
+sudo apt-get install -y python3-pip
+sudo pip3 install boto3
+sudo pip install --upgrade ansible
+sudo apt install -y ansible
+sudo chown -R ubuntu:ubuntu /home/ubuntu
+sudo apt install unzip -y
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+unzip awscliv2.zip
+sudo ~/aws/install
+sudo sed -i  "s/sub_domain_name/{{ aws_instance_name }}/g" /home/ubuntu/gin-utils/dnsconfig/changeip.sh
+sudo sed -i  "s/main_domain_name/{{ domain_name }}/g" /home/ubuntu/gin-utils/dnsconfig/changeip.sh
+sudo cp /home/ubuntu/gin-utils/dnsconfig/changeip.sh /var/lib/cloud/scripts/per-boot/.
+sudo chmod -R -f 777 /var/lib/cloud/scripts/per-boot/changeip.sh
+sudo mkdir /opt/dnsconfig
+sudo chmod -R 777 /opt/dnsconfig
+
+============================================================================================================
+
+#----------kiali
+
+cd /home/ubuntu
+kubectl apply -f /home/ubuntu/gin-utils/k8s-dashboard/k8s-dashboard.yaml
+kubectl create serviceaccount dashboard -n kubernetes-dashboard
+kubectl create clusterrolebinding serviceaccounts-cluster-admin --clusterrole=cluster-admin --group=system:serviceaccounts
+helm install jaeger-all-in-one /home/ubuntu/gin-utils/jaeger/jaeger-all-in-one.tgz -f /home/ubuntu/gin-utils/jaeger/values.yaml  -n gin
+cd istio-1.13.2
+sudo chmod 777 /home/ubuntu/gin-utils/kiali/config.sh
+sudo cp -r /home/ubuntu/gin-utils/kiali/kiali.yaml ~/istio-1.13.2/samples/addons/kiali.yaml
+=sudo cp -r /home/ubuntu/gin-utils/kiali/kiali.yaml ~/istio-1.18.2/samples/addons/kiali.yaml
+
+
+kubectl apply -f /home/ubuntu/istio-1.13.2/samples/addons/prometheus.yaml
+=kubectl apply -f /home/ubuntu/istio-1.18.2/samples/addons/prometheus.yaml
+
+helm repo add grafana https://grafana.github.io/helm-charts
+helm repo update
+helm upgrade --install loki grafana/loki-stack -n istio-system --set grafana.adminPassword=admin123,grafana.persistence.enabled=true,grafana.enabled=true,prometheus.enabled=true,prometheus.alertmanager.persistentVolume.enabled=false,prometheus.server.persistentVolume.enabled=false
+kubectl patch svc prometheus -n istio-system  --patch-file='/home/ubuntu/gin-utils/k3s/patchfile.yaml'
+kubectl patch svc loki-grafana -n istio-system  --patch-file='/home/ubuntu/gin-utils/k3s/patchfile.yaml'
+kubectl apply -f /home/ubuntu/istio-1.13.2/samples/addons/kiali.yaml
+=kubectl apply -f /home/ubuntu/istio-1.18.2/samples/addons/kiali.yaml
+
+kubectl rollout status deployment/kiali -n istio-system
+kubectl get svc -n istio-system
+
+============================================================================================================
+
+#----------deployment-scripts
+
+## Read properties for deployment-scripts
+cd /home/ubuntu
+## Check if deployment-scripts directory exists
+## Copy deployment-scripts
+sudo sed -i  "s/sub_domain_name/{{ aws_instance_name }}/g" /home/ubuntu/deployment-scripts/dcaf4.sh
+sudo sed -i  "s/main_domain_name/{{ domain_name }}/g" /home/ubuntu/deployment-scripts/init.sh
